@@ -27,21 +27,7 @@ level = {
 
 tile=-1
 
- 
-function clamp(val, v_min, v_max)
-	if val > v_max then
-		return v_max
-	elseif val < v_min then
-		return v_min
-	else
-		return val
-	end
-end
-	
 
-
--->8
--- core callbacks
 
 function _init()
  -- init the game yo!
@@ -49,15 +35,72 @@ function _init()
  player = actor({
  	x=50,
  	y=110,
- 	k=1
+ 	k=1,
  })
  
 
-	test = actor({
-		x=8, y=110, k=2,
+	green = actor({
+		k=2, x=16, y=16,
 		has_gravity=false,
+		is_visible=false,
 	})
+	
+	pink = actor({
+		k=3,
+		has_gravity=false,
+		is_visible=false,
+	})
+	
+	orange = actor({
+		k=4,
+		has_gravity=false,
+		is_visible=false,
+	})
+	
+	blue = actor({
+		k=6,
+		has_gravity=false,
+		is_visible=false,
+	})
+	
 end
+
+
+function debug_log()
+ print ("pos "..player.x..","..player.y)
+	print ("wall_x "..player.wall_x)
+	print ("dx "..player.dx)
+	
+	local diff = abs(player.wall_x-player.x)
+	if player.dir == 1 then
+		diff -= 8;	
+	elseif player.dir == -1 then
+	
+	end
+	print ("diff "..diff)
+	--print ("diff "..(abs(player.x-player.wall_x)*player.dir))
+	
+	--[[
+	local pos = get_tile_pos (player.x, player.y)
+	local tile = mget (pos[1], pos[2])
+	
+	print ("tpos: "..tostr(pos[1])..","..tostr(pos[2]))
+	print ("tile: "..tostr(tile))
+	print ("floor: "..tostr(player.hit_floor))
+	print ("wall: "..tostr(player.hit_wall))
+	print ("ceil: "..tostr(player.hit_ceil))
+	]]--
+	
+ --[[
+	print ("flags: "..tostr(fget(tile)))
+ print ("floor_y "..tostr(player.floor_y))
+ ]]--
+ 
+end
+-->8
+-- core callbacks
+
+
 
 function _draw()
  -- lets be wasteful and redraw *everything*
@@ -77,25 +120,16 @@ function _draw()
 			spr (
 				actor.k, 
 				actor.x, 
-				actor.y)
+				actor.y,
+				1, 1, -- num sprites
+				actor.dir == -1)
+				
 		end
 	end
 	
+	debug_log()
 	
 	
-	local pos = get_tile_pos (test.x, test.y)
-	local tile = mget (pos[1], pos[2])
-	
-	
-	print ("pos: "..tostr(pos[1])..","..tostr(pos[2]))
-	print ("tile: "..tostr(tile))
-	print ("player x:"..player.x)
-	print ("x_diff: "..tostr(player.x_diff))
-	--[[
-	print ("flags: "..tostr(fget(tile)))
- print ("floor_y "..tostr(player.floor_y))
- ]]--
- 
 end
 
 
@@ -124,11 +158,12 @@ function _update()
 	for i=1, #actors do 
 		local a = actors[i]
 		
+		-- sets collision flags
 		check_collisions(a)
 		
 		-- gravity
 		if a.has_gravity then
-			if not a.on_floor then
+			if not a.hit_floor then
 				a.dy += gravity
 			else
 				-- on the floor
@@ -153,10 +188,35 @@ function _update()
 				a.dx = 0
 			end
 		end
+		
+		-- don't move through walls
+		if a.hit_wall then
+		 local diff = abs(a.x - a.wall_x)
+		 if a.dir == 1 then
+		 	diff -= 8 -- sprite width
+		 elseif a.dir == -1 then
+		 	diff *= -1
+		 end
+		 -- snap to wall edge
+		 a.dx = diff
+		end
+		
+		-- clamp the total delta
+		-- we can move each tick
+		a.dy = clamp(a.dy, -8, 8)
+		a.dx = clamp(a.dx, -8, 8)
 
-		-- apply deltas
-		a.x += flr(a.dx)
-		a.y += flr(a.dy)
+		-- get final position		
+		local x = a.x + a.dx
+		local y = a.y + a.dy
+		
+		-- don't allow result to put
+		-- us inside a wall.
+		if not is_solid (get_tile_pos (x, y)) then
+			a.x = x
+			a.y = y
+		end
+
 	end
 	
 	
@@ -167,17 +227,17 @@ end
 function actor (config)
  -- default props
 	local star={
+		 k= 0, -- sprite 0 index
 	  x= 0, -- x position
 	  y= 0, -- y position
-	  k= 0, -- sprite 0 index
 	  dx= 0, -- delta x per tick
 	  dy= 0, -- delta y per tick
 	  dir= 1, -- direction x-axis
 	  has_gravity= true,
 	  is_visible= true,
-	  on_floor= false,
-	  -- tmp
-	  x_diff=0,
+	  hit_floor= false,
+	  hit_wall= false,
+	  hit_ceil= false,
 	}
 	-- mix in the config
 	for k, v in pairs(config) do
@@ -194,18 +254,18 @@ end
 
 -- tiles are 8x8
 -- x, y are 0 - 128 (screen pos)
-function get_tile_pos(x, y, a)
+function get_tile_pos(x, y)
  local tile_x = flr (x/8)
 	local tile_y = flr (y/8)
 	
 	-- x,y is the top/left pos
 	-- align closer to center
 	local diff = abs((tile_x*8) - x)
-	if diff >= 5 then
+	if diff > 4 then
 		tile_x += 1;
 	end
 	diff = abs((tile_y*8) - y)
-	if diff >= 5 then
+	if diff > 4 then
 		tile_y += 1;
 	end
 
@@ -228,43 +288,81 @@ function check_collisions(a)
 	-- get the actors tile position
 	local pos = get_tile_pos(a.x, a.y, a)
 	
-	--debug: show check pos
-	test.x = pos[1]*8
-	test.y = pos[2]*8
-	
-	-- get floor tile
+	--debug: player collision
+	if a == player then
+		green.x = pos[1]*8
+		green.y = pos[2]*8
+	end
+
+	--
+	-- check for floor
 	local floor_pos = {
 		pos[1], 
 		pos[2]+1
 	}
-	a.on_floor = is_solid(floor_pos)
+	a.hit_floor = is_solid(floor_pos)
 	a.floor_y = floor_pos[2]*8;	
 	
-	
-	
-	local wall_pos = {
-		pos[1],
-		pos[2],
-	}
-	if a.dir == 1 then
-		wall_pos[1] += 1
-	elseif a.dir == -1 then
-		wall_pos[1] -= 2
+	--debug: player collision
+	if a == player then
+		pink.x = floor_pos[1]*8
+		pink.y = floor_pos[2]*8
 	end
 	
+	--
+	-- check the wall in the
+	-- direction we are facing.
+	local wall_pos = {
+		pos[1] + a.dir,
+		pos[2],
+	}
+	a.hit_wall = is_solid (wall_pos)
+	a.wall_x = wall_pos[1]*8
+	
+	if a.dir == -1 then
+		a.wall_x += 8 -- add width
+	end
+	
+	--debug: player collision
+	if a == player then
+		orange.x = wall_pos[1]*8
+		orange.y = wall_pos[2]*8
+	end
+	
+	local ceil_pos = {pos[1], pos[2]-1}
+	a.hit_ceil = is_solid (ceil_pos)
+	a.ceil_y = ceil_pos[2]*8
+	--debug: player collision
+	if a == player then
+		blue.x = ceil_pos[1]*8
+		blue.y = ceil_pos[2]*8
+	end
 	
 end
 
 
+-->8
+-- utils
+
+-- simple clamp
+function clamp(val, v_min, v_max)
+	if val > v_max then
+		return v_max
+	elseif val < v_min then
+		return v_min
+	else
+		return val
+	end
+end
 __gfx__
-00000000c0000000bb000bbb0000000000000000000000000000000000000000000000000000000000000000000000000000000022222222c22222222222222c
-0000000000077000b000000b000000000000000000000000000000000000000000000000000000000000000000000000000000002bbbbb02c13333333333311c
-0070070000700700b0000000000000000000000000000000000000000000000000000000000000000000000000000000000000002bbbbb02c13333333333311c
+0000000000000000bb000bbbeee000ee9900099988000888cc000ccc00000000000000000000000000000000000000000000000022222222c22222222222222c
+0000000000077000b000000be000000e9000000980000008c000000c0000000000000000000000000000000000000000000000002bbbbb02c13333333333311c
+0070070000700700b00000000000000e9000000080000000c00000000000000000000000000000000000000000000000000000002bbbbb02c13333333333311c
 0007700000700700000000000000000000000000000000000000000000000000000000000000000000000000000000000000000024bbb402c13333333333311c
 0007700000077000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000024bbb402c13333333333311c
-00700700000700000000000b000000000000000000000000000000000000000000000000000000000000000000000000000000002bbbbb02c13333333333311c
-0000000000777000b000000b000000000000000000000000000000000000000000000000000000000000000000000000000000002bbbbb02c13333333333311c
-0000000087070788bbb000bb0000000000000000000000000000000000000000000000000000000000000000000000000000000022222222c13433333334311c
+00700700000700000000000be000000000000009000000080000000c0000000000000000000000000000000000000000000000002bbbbb02c13333333333311c
+0000000000777000b000000be000000e9000000980000008c000000c0000000000000000000000000000000000000000000000002bbbbb02c13333333333311c
+0000000087070788bbb000bbee000eee9990009988800088ccc000cc00000000000000000000000000000000000000000000000022222222c13433333334311c
 4444444400070070000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000c13433333334311c
 4444444400000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000c13433333334311c
 5555555500000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000c13333333333311c
