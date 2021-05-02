@@ -1,0 +1,180 @@
+pico-8 cartridge // http://www.pico-8.com
+version 32
+__lua__
+-- coroutine action
+
+actors = {}
+player = nil
+
+function _init()
+	player = actor({
+		k=1, w=2, h=2,
+		x=10, y=50
+	})
+end
+
+
+function _update()
+	player_input()
+
+	for 웃 in all(actors) do
+		if 웃.action 
+		 and costatus(웃.action) != "dead" then
+			assert(coresume(웃.action, 웃))
+	 end
+	end
+end
+
+function _draw()
+	cls(13)
+	
+	for 웃 in all(actors) do
+		spr(웃.k, 
+			웃.x, 웃.y, 
+			웃.w, 웃.h, 
+			웃.dir == -1, 
+			웃.flip_y)
+			
+		if 웃.debug then
+			print(웃.debug)
+		end
+	end
+end
+-->8
+-- actors!
+
+
+-- actor has sprite and position.
+function actor(config)
+ local 웃 = {
+  -- sprite props
+ 	x=0, -- pos x
+ 	y=0, -- pos y
+ 	k=0, -- sprite number
+ 	w=1, -- sprites wide
+ 	h=1, -- sprites tall
+ 	flip_y=false,
+ 	-- physics
+ 	acc=0, -- acceration
+ 	dir=1, -- direction
+ 	-- state props
+ 	action=nil,
+ 	next_action=nil,
+ 	can_interrupt=true,
+ }
+ -- merge the config in, overriding default values.
+ merge(웃, config)
+ -- start the action
+ start_action(웃, 웃.action)
+ -- add to the list
+ add(actors, 웃)
+ return 웃
+end
+
+
+-->8
+-- utils
+--[[
+…∧░➡️⧗▤⬆️☉🅾️◆{}
+█★⬇️✽●♥웃⌂⬅️
+▥❎🐱ˇ▒♪😐
+]]--
+
+
+function start_action(웃, action)
+	if not action then return end
+	-- skip if the current action can't be inturrupted.
+	if 웃.action and not 웃.can_interrupt then return end
+	-- don't restart the action if it's running.
+	if 웃.action_☉ == action 
+	 and costatus(웃.action) != "dead" then return end
+	-- start the action as coroutine
+	웃.action = cocreate(action)	
+end
+
+
+-- merges obj2 into obj1
+function merge(★, 🐱)
+	for k,v in pairs(🐱) do
+		★[k] = v
+	end
+	return ★
+end
+-->8
+-- coroutine actions
+
+function idle(obj)
+	while true do
+		obj.x -= 4
+		yield()
+		obj.x += 4
+		yield()
+		obj.x += 4
+		yield()
+		obj.x -= 4
+	end
+end
+
+function walk(웃)
+	웃.can_interrupt = true
+	
+	while 웃.acc > 0 do
+		웃.x += 웃.dir * 웃.acc
+		yield()
+	end
+end
+
+function jump(웃)
+	웃.can_interrupt = false
+	
+	while 웃.y > 0 
+	 and 웃.y < 128 do
+		웃.y -= 웃.acc
+		-- add gravity
+		웃.y *= 0.95
+		yield()
+	end
+	
+	웃.can_interrupt = true
+end
+-->8
+function player_input()
+	local 웃 = player
+	
+	if btn(➡️) then
+		--웃.x += 8
+		웃.dir = 1
+		웃.acc = 1
+	 start_action(웃, walk)
+	elseif btn(⬅️) then
+		웃.dir = -1
+		웃.acc = 1
+		start_action(웃, walk)
+	else
+		웃.acc = 0
+	end
+	
+	if btn(⬆️) then
+		웃.acc = 1
+		start_action(웃, jump)
+	else
+	
+	end
+end
+__gfx__
+00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00700700000000088800000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00077000000008800088000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00077000000008000008000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00700700000080000000800000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00000000000080000000800000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00000000000080000000800000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00000000000008000008000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00000000000008800088000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00000000000000288800000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00000000000222444220000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00000000002244422422000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00000000022224444222200000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00000000002244404422000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00000000000044000440000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
